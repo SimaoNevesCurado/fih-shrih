@@ -1,10 +1,9 @@
 -- FishingMath.lua
--- Módulo matemático de física para a briga com o peixe
 local FishingMath = {}
 
 function FishingMath.InitializeFight(playerState, fish, castDistance)
     playerState.Distance = castDistance
-    playerState.MaxDistance = 150 -- Distância limite para fuga
+    playerState.MaxDistance = 150
     playerState.Tension = 10
     playerState.Progress = 0
     playerState.FishState = "Tired" 
@@ -15,37 +14,45 @@ function FishingMath.UpdateFight(state, dt)
     local fish = state.CurrentFish
     if not fish then return "Idle" end
     
-    -- 1. Alternância de estados do peixe (Fúria vs Cansaço)
+    -- 1. Gerenciamento de Estado
     if os.clock() - state.LastStateChange > math.random(3, 6) then
         state.FishState = (state.FishState == "Tired") and "Fury" or "Tired"
         state.LastStateChange = os.clock()
     end
 
     local isFury = (state.FishState == "Fury")
-    local dragFactor = state.Drag -- 0 a 1
-    local fishBaseForce = isFury and fish.FightForce or (fish.FightForce * 0.2)
-    local retrieveForce = 15
-
-    -- 2. Cálculo da Tensão (Tension)
-    -- O Drag faz a força do peixe ser transferida para a Tensão da linha
-    local tensionFromFish = (fishBaseForce * dragFactor)
-    local tensionFromRetrieve = state.IsRetrieving and 10 or 0
-    -- O Drag alto ajuda a segurar, mas se ele estiver muito alto durante a fúria, a tensão dispara
-    local tensionChange = (tensionFromFish + tensionFromRetrieve - (state.Drag * 5)) * dt
-    state.Tension = math.clamp(state.Tension + tensionChange, 0, 100)
-
-    -- 3. Cálculo da Distância (Distance)
-    -- Peixe ganha distância quando o Drag está baixo e ele está em fúria
-    local distanceGain = (fishBaseForce * (1 - dragFactor)) * (isFury and 1.5 or 0.5) * dt
-    -- Jogador perde distância do peixe apenas quando não está em fúria
-    local distanceLoss = (state.IsRetrieving and not isFury) and retrieveForce * dt or 0
+    local drag = state.Drag -- 0.0 a 1.0
+    local baseForce = isFury and fish.FightForce or (fish.FightForce * 0.2)
     
-    state.Distance = math.clamp(state.Distance + distanceGain - distanceLoss, 0, state.MaxDistance)
+    -- 2. TENSÃO (Tension)
+    -- O Drag alto trava a linha, logo qualquer força do peixe vira Tensão.
+    -- O Drag baixo libera a linha, reduzindo drasticamente a Tensão gerada.
+    -- Adicionamos um multiplicador base para controlar a agressividade geral.
+    local tensionGeneration = baseForce * drag
     
-    -- Atualiza progresso baseado na distância percorrida (0 a 100)
+    -- Se o jogador estiver a recolher (Retrieve):
+    -- Recolher gera tensão adicional, mas é a única forma de ganhar progresso.
+    local retrieveTension = state.IsRetrieving and (baseForce * 0.5) or 0
+    
+    -- Tensão final: (Tensão do Peixe + Tensão do Recolhimento) - Alívio do Drag
+    -- O Drag atua como alívio: se o drag for 0, a tensão cai para 0 rapidamente.
+    local delta = (tensionGeneration + retrieveTension - (1.0 - drag) * 20) * dt
+    
+    state.Tension = math.clamp(state.Tension + delta, 0, 100)
+
+    -- 3. DISTÂNCIA e PROGRESSO (Distance)
+    -- Se o Drag estiver baixo, o peixe ganha distância.
+    -- Se o Drag estiver alto, o peixe não consegue correr (resistência).
+    -- Recolher (Retrieve) só funciona se a Tensão não estiver crítica.
+    local runSpeed = baseForce * (1.1 - drag) * (isFury and 1.5 or 0.5)
+    local pullSpeed = (state.IsRetrieving and state.Tension < 80) and (fish.FightForce * 0.8) or 0
+    
+    state.Distance = math.clamp(state.Distance + (runSpeed - pullSpeed) * dt, 0, state.MaxDistance)
+    
+    -- Progresso: 100% quando Distance é 0.
     state.Progress = math.clamp(((state.MaxDistance - state.Distance) / state.MaxDistance) * 100, 0, 100)
 
-    -- 4. Verificação de status
+    -- 4. Verificação
     if state.Tension >= 100 then return "Snapped" end
     if state.Distance >= state.MaxDistance then return "Escaped" end
     if state.Distance <= 0 then return "Caught" end
