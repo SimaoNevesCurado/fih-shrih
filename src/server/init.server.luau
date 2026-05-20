@@ -1,1 +1,1 @@
-print("Hello world, from server!")
+-- Este arquivo está vazio pois a lógica foi consolidada no FishingManager.server.luau para evitar conflitos de inicialização.
