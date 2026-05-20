@@ -43,13 +43,14 @@ progressFill.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
 Remotes.TensionUpdate.OnClientEvent:Connect(function(data)
     if typeof(data) == "table" then
         currentTension = data.Tension
+        currentDrag = data.Drag or currentDrag -- Atualiza drag vindo do servidor
         barFill.Size = UDim2.new(data.Tension / 100, 0, 1, 0)
         progressFill.Size = UDim2.new(data.Progress / 100, 0, 1, 0)
         
         if data.IsRetrieving then
-            infoLabel.Text = "RETRIEVING... | Drag: " .. currentDrag .. "%"
+            infoLabel.Text = "RETRIEVING... | Drag: " .. math.floor(currentDrag) .. "%"
         else
-            infoLabel.Text = "Drag: " .. currentDrag .. "% | Tension: " .. math.floor(currentTension) .. "%"
+            infoLabel.Text = "Drag: " .. math.floor(currentDrag) .. "% | Tension: " .. math.floor(currentTension) .. "%"
         end
     elseif typeof(data) == "table" and data.Type == "Alert" then
         infoLabel.Text = "!! FISGUE AGORA (Mouse1) !!"
